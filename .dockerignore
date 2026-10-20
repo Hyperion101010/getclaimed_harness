@@ -1,0 +1,9 @@
+.venv
+venv
+.env
+.sessions
+__pycache__
+.pytest_cache
+.git
+*.pyc
+practice_langchain

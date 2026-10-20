@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GetClaimed</title>
+  <style>
+    :root { --ink:#123554; --muted:#5c7389; --line:#c9e2ee; --gold:#f0ad35; --navy:#0d416b; --teal:#10a9a1; --sky:#dff5ff; --page:#f4fbff; }
+    * { box-sizing:border-box; } html, body { margin:0; min-height:100%; }
+    body { height:100dvh; overflow:hidden; color:var(--ink); font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#fff; display:flex; flex-direction:column; }
+    .topbar { height:92px; flex:0 0 92px; display:flex; align-items:center; justify-content:space-between; padding:0 77px; border-bottom:1px solid #bde5ef; background:linear-gradient(90deg,#fff 0%,#f0fcff 100%); }
+    .brand { display:flex; align-items:center; gap:9px; font-size:34px; font-weight:750; letter-spacing:-1.45px; color:var(--navy); }
+    .brand-mark { width:47px; height:53px; background:url('/logo.png') 50% 48% / 138px auto no-repeat; flex:none; }
+    nav { display:flex; align-items:center; } .sample-claims-button { padding:11px 18px; border:1px solid #8ed4df; border-radius:10px; color:var(--navy); background:#fff; box-shadow:0 3px 8px rgba(29,101,132,.1); font:600 17px/1 Inter,ui-sans-serif,sans-serif; cursor:pointer; }
+    .workspace { flex:1; min-height:0; background:radial-gradient(circle at 50% 25%,rgba(255,255,255,.98) 0%,rgba(255,255,255,.73) 28%,transparent 52%),radial-gradient(circle at 83% 16%,#c9f4ef 0%,transparent 30%),linear-gradient(130deg,#e4f7ff 0%,#f7fcff 45%,#e4f6ff 100%); }
+    .stage { height:100%; min-height:0; display:grid; grid-template-columns:minmax(260px,25.2%) minmax(0,1fr); column-gap:clamp(24px,2.7vw,38px); padding:clamp(28px,2.7vw,38px) clamp(24px,5.5vw,77px) 0; overflow:hidden; }
+    .claim-card { width:100%; min-height:332px; align-self:start; padding:21px; border:1px solid #d3edf5; border-radius:14px; background:linear-gradient(145deg,rgba(255,255,255,.98),rgba(242,253,255,.95)); box-shadow:0 13px 24px rgba(25,100,130,.16); overflow:hidden; }
+    .claim-card::before { content:""; position:absolute; top:0; left:0; right:0; height:7px; background:linear-gradient(90deg,#19b6b0,#4dc7f0,#f5bd46); }
+    .claim-card h1 { margin:0 0 21px; font-size:23px; line-height:1; letter-spacing:-.65px; }
+    .field { margin:0 0 15px; font-size:18px; line-height:1.15; } .field:last-child { margin-bottom:0; } .field dt { margin-bottom:5px; color:var(--muted); } .field dd { margin:0; color:var(--ink); }
+    .status-pending,.status-review { color:#aa7415!important; } .status-denied { color:#c83c3c!important; } .status-accepted { color:#198660!important; }
+    .status-accepted::before,.status-review::before,.status-denied::before { content:""; display:inline-block; width:17px; height:17px; margin-right:3px; vertical-align:-2px; border-radius:50%; box-shadow:inset 0 0 2px rgba(0,0,0,.4); }
+    .status-accepted::before { background:linear-gradient(135deg,#50cc45,#178d25); } .status-review::before { background:linear-gradient(135deg,#ffd465,#d89417); } .status-denied::before { background:linear-gradient(135deg,#f26a62,#b62636); }
+    .conversation { width:100%; height:100%; min-height:0; display:flex; flex-direction:column; padding-top:clamp(54px,4.3vw,60px); }
+    #log { flex:1; min-height:0; overflow-y:auto; padding:0 0 22px; scrollbar-color:#aebac6 transparent; scrollbar-width:thin; }
+    #log::-webkit-scrollbar { width:9px; } #log::-webkit-scrollbar-thumb { background:#aebac6; border-radius:9px; }
+    .message { display:flex; margin:0 0 28px; } .message.assistant { align-items:flex-start; flex-direction:column; }
+    .assistant-id { display:flex; align-items:center; gap:14px; height:48px; margin:0 0 0 2px; font-size:22px; font-weight:650; letter-spacing:-.45px; }
+    .shelly { width:69px; height:66px; margin:0 -1px 0 0; border-radius:50%; background:#d7fbf5 url('/logo.png') 50% 47% / 182px auto no-repeat; box-shadow:0 4px 11px rgba(13,115,126,.16); }
+    .bubble { max-width:422px; font-size:18px; line-height:1.52; letter-spacing:-.24px; box-shadow:0 10px 17px rgba(31,94,120,.15); }
+    .assistant .bubble { margin-top:-7px; margin-left:82px; padding:15px 18px; border:1px solid #d8eef3; border-radius:15px 15px 15px 3px; background:linear-gradient(145deg,#fff,#f3feff); }
+    .bubble p { margin:0 0 8px; } .bubble p:last-child { margin-bottom:0; }
+    .bubble ul,.bubble ol { margin:8px 0; padding-left:1.25em; } .bubble li { margin:4px 0; }
+    .user { justify-content:flex-end; margin:0 0 16px; } .user .bubble { width:520px; padding:16px 18px; border-radius:19px 19px 5px 19px; color:#093c5c; background:linear-gradient(135deg,#d5f6ff,#c7e9ff); }
+    .composer { flex:none; display:flex; gap:12px; align-items:center; margin:0 0 15px; padding:16px 20px; border:1px solid #d2edf3; background:rgba(255,255,255,.96); border-radius:14px; box-shadow:0 10px 19px rgba(27,96,124,.16); }
+    #input { min-width:0; flex:1; height:62px; padding:0 17px; border:1px solid #b9dce5; border-radius:14px; outline:none; color:var(--ink); font:inherit; font-size:18px; } #input:focus { border-color:#1aaeb6; box-shadow:0 0 0 3px rgba(26,174,182,.13); } #input::placeholder { color:#7891a1; }
+    #send { height:51px; padding:0 18px; border:0; border-radius:11px; color:#fff; font-size:18px; font-weight:650; background:linear-gradient(135deg,#ed9d2b,#f2c34f); box-shadow:0 4px 8px rgba(179,113,22,.27); cursor:pointer; } #send:disabled { opacity:.55; cursor:wait; }
+    .empty-panel { display:none; }
+    footer { height:69px; flex:0 0 69px; display:flex; justify-content:center; align-items:center; gap:26px; border-top:1px solid #0e6287; background:linear-gradient(95deg,#0d416b,#126886 55%,#129d9d); color:#e8fbff; font-size:15px; }
+    dialog { width:min(760px,calc(100% - 32px)); max-height:min(720px,calc(100dvh - 48px)); padding:0; border:0; border-radius:18px; color:var(--ink); background:#f8fdff; box-shadow:0 24px 65px rgba(7,45,71,.35); overflow:hidden; }
+    dialog::backdrop { background:rgba(7,39,63,.55); backdrop-filter:blur(3px); }
+    .modal-header { display:flex; align-items:center; justify-content:space-between; padding:22px 26px; color:#fff; background:linear-gradient(110deg,#0d416b,#129d9d); } .modal-header h2 { margin:0; font-size:24px; } .close-modal { width:34px; height:34px; border:0; border-radius:50%; color:#fff; background:rgba(255,255,255,.18); font-size:24px; cursor:pointer; }
+    .modal-body { max-height:calc(100dvh - 155px); overflow:auto; padding:22px 26px 28px; } .modal-body p { margin:0 0 17px; color:var(--muted); line-height:1.45; } .sample-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; } .sample-card { padding:15px; border:1px solid #cdebf1; border-radius:12px; background:#fff; } .sample-card h3 { margin:0 0 8px; font-size:18px; } .sample-card p { margin:0 0 4px; font-size:14px; } .sample-card code { color:#0d6380; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; } .claim-list { margin:9px 0 0; padding-left:19px; font-size:14px; line-height:1.55; } .no-claims { color:#aa7415!important; font-weight:600; }
+    @media (max-width:1050px) { .stage { display:block; padding:0; } .claim-card { display:none; } .conversation { width:min(760px,calc(100% - 48px)); margin:0 auto; padding-top:60px; } }
+    @media (max-width:720px) { .topbar { height:72px; padding:0 20px; } .brand { font-size:25px; } .brand-mark { width:38px; height:45px; } .sample-claims-button { padding:9px 12px; font-size:14px; } .claim-card { display:none; } .conversation { width:auto; margin:0 16px; padding-top:30px; } .assistant .bubble { margin-left:0; } .assistant-id { display:none; } .bubble,.user .bubble { max-width:100%; width:auto; } .composer { margin-bottom:20px; padding:10px; } footer { font-size:12px; gap:12px; } .sample-grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>GetClaimed</span></div><nav aria-label="Primary navigation"><button id="sampleClaimsButton" class="sample-claims-button" type="button">Sample Claims</button></nav></header>
+  <main class="workspace">
+    <section class="stage">
+      <aside class="claim-card" aria-label="Claim snapshot"><h1>Claim Snapshot</h1><dl>
+        <div class="field"><dt>Claim ID</dt><dd id="claimId">••••••••••••</dd></div><div class="field"><dt>Policy Holder</dt><dd id="policyHolder">Awaiting identity</dd></div><div class="field"><dt>Status</dt><dd id="claimStatus" class="status-pending">Identity required</dd></div>
+      </dl></aside>
+      <section class="conversation" aria-label="GetClaimed assistant"><div id="log" aria-live="polite"></div><form id="form" class="composer"><input id="input" type="text" autocomplete="off" placeholder="Type your message..." aria-label="Type your message" /><button id="send" type="submit">Send</button></form></section>
+    </section><aside class="empty-panel" aria-hidden="true"></aside>
+  </main>
+  <footer><span>Privacy Policy</span><span>Terms of Service</span><span>Copyright 2026 GetClaimed Inc.</span></footer>
+  <dialog id="sampleClaimsModal" aria-labelledby="sampleClaimsTitle">
+    <div class="modal-header"><h2 id="sampleClaimsTitle">Sample Claims</h2><button class="close-modal" id="closeSampleClaims" type="button" aria-label="Close sample claims">×</button></div>
+    <div class="modal-body"><p>Use this test data with a new session for each scenario. Identity verification requires any three of name, DOB, phone, email, or ID last four; policy number is lookup-only.</p>
+      <div class="sample-grid">
+        <article class="sample-card"><h3>Margaret Chen</h3><p><code>POL-9921</code> · DOB 1985-03-15 · ID last 4: 4472</p><p>+1 650 521 2836 · margaret@email.com</p><ul class="claim-list"><li><strong>CL-2048</strong> — Denied healthcare, Jan 2026</li><li><strong>CL-2102</strong> — Open auto</li><li><strong>CL-1899</strong> — Closed dental</li><li><strong>CL-2011</strong> — Closed healthcare</li></ul></article>
+        <article class="sample-card"><h3>Ma Tian</h3><p><code>POL-8836</code> · DOB 1964-09-10 · ID last 4: 6688</p><p>+1 650 208 8799 · matian@example.com</p><ul class="claim-list"><li><strong>CL-3001</strong> — Denied healthcare</li></ul></article>
+        <article class="sample-card"><h3>Ava Lopez</h3><p><code>POL-1044</code> · DOB 1990-08-21 · ID last 4: 9180</p><p>+1 650 388 2920</p><p class="no-claims">No claims on file</p></article>
+        <article class="sample-card"><h3>Ya Wen Li / Yaven Li</h3><p><code>POL-7742</code> · DOB 1989-12-03 · ID last 4: 5317</p><p>+1 650 521 2830 · yawen.li@gmail.com</p><p class="no-claims">No claims on file</p></article>
+      </div>
+    </div>
+  </dialog>
+  <script>
+    let sessionId=null; const log=document.getElementById('log'),form=document.getElementById('form'),input=document.getElementById('input'),send=document.getElementById('send'),sampleClaimsModal=document.getElementById('sampleClaimsModal');
+    function escapeHtml(value){return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+    function inlineFmt(value){return escapeHtml(value).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')}
+    function renderMessage(message){const lines=String(message||'').split('\n');let html='',listType=null,items=[],para=[];const flushList=()=>{if(!listType)return;html+='<'+listType+'>'+items.map(item=>'<li>'+inlineFmt(item)+'</li>').join('')+'</'+listType+'>';listType=null;items=[]};const flushPara=()=>{if(!para.length)return;html+='<p>'+inlineFmt(para.join(' '))+'</p>';para=[]};for(const line of lines){const trimmed=line.trim();const numbered=trimmed.match(/^\d+\.\s+(.*)$/);const bullet=trimmed.match(/^[-*]\s+(.*)$/);if(numbered){flushPara();if(listType&&listType!=='ol')flushList();listType='ol';items.push(numbered[1])}else if(bullet){flushPara();if(listType&&listType!=='ul')flushList();listType='ul';items.push(bullet[1])}else if(!trimmed){flushList();flushPara()}else{flushList();para.push(trimmed)}}flushList();flushPara();return html||('<p>'+inlineFmt(message)+'</p>')}
+    function addBubble(role,message,identity=false){const row=document.createElement('div');row.className='message '+role;if(role==='assistant'&&identity){const id=document.createElement('div');id.className='assistant-id';id.innerHTML='<span class="shelly"></span><span>Shelly</span>';row.appendChild(id)}const bubble=document.createElement('div');bubble.className='bubble';if(role==='assistant'){bubble.innerHTML=renderMessage(message)}else{bubble.textContent=message}row.appendChild(bubble);log.appendChild(row);log.scrollTop=log.scrollHeight}
+    function showWelcome(){addBubble('assistant',"Hello! I'm Shelly, your GetClaimed assistant.\nTo securely access your information, please provide your Claim ID and Date of Birth.",true)}
+    function redactName(name){return String(name).split(/\s+/).filter(Boolean).map(part=>part[0]+"•".repeat(Math.max(3,part.length-1))).join(' ')}
+    function redactPolicy(policy){const value=String(policy);const prefix=value.includes('-')?value.split('-')[0]+'-':'';return prefix+'••••'}
+    function renderSnapshot(debug){const verified=!!debug.verified,pii=debug.collected_pii||{},hint=debug.case_hint||{};const claimId=document.getElementById('claimId'),holder=document.getElementById('policyHolder'),status=document.getElementById('claimStatus');if(verified){const claimState=String(hint.status||'').toLowerCase();claimId.textContent=debug.selected_case_id||'Claim located';holder.textContent=pii.name||'Verified policy holder';if(claimState==='denied'){status.textContent='Denied';status.className='status-denied'}else if(['accepted','approved','closed'].includes(claimState)){status.textContent=claimState==='closed'?'Closed':'Accepted';status.className='status-accepted'}else{status.textContent='In Review';status.className='status-review'}return}const supplied=Object.values(pii).filter(Boolean).length;claimId.textContent=pii.policy_number?redactPolicy(pii.policy_number):'••••••••••••';holder.textContent=pii.name?redactName(pii.name):(pii.phone?'••• ••• '+String(pii.phone).slice(-4):'Awaiting identity');status.textContent=supplied?'Verification in progress · '+supplied+' detail'+(supplied===1?'':'s')+' received':'Identity required';status.className='status-pending'}
+    async function startSession(){try{const data=await(await fetch('/session',{method:'POST'})).json();sessionId=data.session_id;renderSnapshot(data.debug);showWelcome()}catch{showWelcome()}}
+    async function sendMessage(message){if(!message||!sessionId)return;addBubble('user',message);send.disabled=true;input.value='';try{const res=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sessionId,message})});const data=await res.json();if(!res.ok)throw new Error(data.detail||'chat failed');sessionId=data.session_id;addBubble('assistant',data.reply,true);renderSnapshot(data.debug)}catch{addBubble('assistant','I’m sorry, I had trouble sending that message. Please try again.',true)}finally{send.disabled=false;input.focus()}}
+    form.addEventListener('submit',e=>{e.preventDefault();sendMessage(input.value.trim())});document.getElementById('sampleClaimsButton').addEventListener('click',()=>sampleClaimsModal.showModal());document.getElementById('closeSampleClaims').addEventListener('click',()=>sampleClaimsModal.close());sampleClaimsModal.addEventListener('click',e=>{if(e.target===sampleClaimsModal)sampleClaimsModal.close()});startSession();
+  </script>
+</body>
+</html>
