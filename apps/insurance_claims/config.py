@@ -16,9 +16,8 @@ class Settings(BaseSettings):
     )
 
     openrouter_api_key: str = ""
-    openrouter_model: str = "openai/gpt-4o-mini"
+    openrouter_model: str = "z-ai/glm-5.3-flashx"
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    session_store_dir: Path = PROJECT_ROOT / ".sessions"
     fixtures_dir: Path = FIXTURES_DIR
 
 

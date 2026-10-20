@@ -46,7 +46,7 @@ def test_healthz_and_index():
     assert client.get("/healthz").json()["status"] == "ok"
     home = client.get("/")
     assert home.status_code == 200
-    assert "GetClaimed" in home.text
+    assert "GetClaim" in home.text
 
 
 def test_session_create_and_fetch():

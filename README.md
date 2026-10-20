@@ -1,23 +1,105 @@
-# GetClaimed
+# GetClaim: AI Claim Agent
 
-Insurance claims support agent with a fixed SOP: **VERIFY_ID → RESOLVE_INTENT → PROCESS_CASE → POST_PROCESS**.
+A conversational claims assistant that follows a support SOP without sounding like a script.
 
-The model talks naturally and chooses tools. The harness owns phase order, identity gates, and what tools are allowed. Claim facts come from fixture tools, not from the model inventing a file.
+The language model writes replies and decides which tool to call. The harness owns identity, file access, and when the conversation is allowed to move forward. Claim facts are read from fixture tools only; the model does not invent a case file.
 
-Repo: [Hyperion101010/getclaimed_harness](https://github.com/Hyperion101010/getclaimed_harness)
+| | |
+|---|---|
+| Demo | [https://p01--getclaimed-harness-copy--yzdpgzzlcpd6.code.run](https://p01--getclaimed-harness-copy--yzdpgzzlcpd6.code.run) |
+| Source | [Hyperion101010/getclaimed_harness](https://github.com/Hyperion101010/getclaimed_harness) |
 
-## How it works
+The hosted demo uses [GLM 5.3 FlashX](https://openrouter.ai/z-ai/glm-5.3-flashx) through [OpenRouter](https://openrouter.ai/):
 
-1. **VERIFY_ID** — Tools: `verify_identity`, `remember`, `escalate_to_human`. Needs **3 of 5**: name, DOB, phone, email, SSN/ID last 4. Policy number is lookup only. No claim details until verified.
-2. **RESOLVE_INTENT** — `list_claims` / `get_claim`. Hints stored during ID (type, status, month) are reused. Unique match selects the case.
-3. **PROCESS_CASE** — Answers from `get_claim` and `get_document_guidance` only.
-4. **POST_PROCESS** — Offer an email summary. Send only after an explicit yes (`send_email_summary` with `confirmed=true`). Skip closes the session.
+```
+OPENROUTER_MODEL=z-ai/glm-5.3-flashx
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+```
 
-`remember` can store a hint like “denied healthcare January” while still in VERIFY_ID.
+Reload the page to start a new session. The hosted service runs as a **single replica**; session state is in process memory.
 
-## Setup (local)
+## Agent harness
 
-Python 3.12+.
+A harness is the control plane around the model. GetClaim uses it so the assistant can be fluent in English and still cannot skip policy.
+
+**What the model is allowed to do.** Parse messy utterances, ask clarifying questions, pick a tool, and phrase the answer.
+
+**What the model is not allowed to do.** Mark a caller as verified, open a claim file, send an email summary, or change workflow stage. Those are tool side effects. If a tool is not in the current allow-list, the call is rejected.
+
+That split is the product. Identity is a gate, not a suggestion. Until the verifier matches the caller to a policyholder on at least three independent fields (name, date of birth, phone, email, or ID last four), claim tools are not bound. Policy number is used only to look the person up. Name matching is fuzzy (rapidfuzz ≥ 88) so “Yaven Li” still reaches Ya Wen Li.
+
+Callers often volunteer later-stage information too early (“I’m calling about the January healthcare denial”). The harness records that as a **hint** without leaving identity. After the gate opens, claim listing reuses the hint so the assistant does not start over. A unique match selects the file automatically; several matches are listed; none is reported as empty.
+
+Once a file is selected, answers must come from `get_claim` and `get_document_guidance`. Wrap-up offers an email summary and sends it only after an explicit yes. A decline ends the session. A request for a person, or three failed identity matches, can escalate to a human.
+
+## Architecture
+
+Each browser tab is one session. `POST /session` allocates a `SessionState` in an in-memory store keyed by `session_id`. Every `POST /chat` loads that object, mutates it through tools, then writes it back. An unknown id returns 404; a second replica would not see the first replica’s store.
+
+```mermaid
+sequenceDiagram
+    participant UI
+    participant API as FastAPI
+    participant Store as InMemorySessionStore
+    participant Agent as ClaimsAgent
+    participant LLM as OpenRouter
+    participant Tools as execute_tool
+    participant FX as Fixtures
+
+    UI->>API: POST /session
+    API->>Store: create SessionState
+    Store-->>UI: session_id
+
+    UI->>API: POST /chat session_id, message
+    API->>Store: get(id)
+    alt unknown id
+        API-->>UI: 404
+    else found
+        API->>Agent: run turn
+        Agent->>Agent: append user line to transcript
+        loop up to 8 tool calls
+            Agent->>LLM: tools allowed for this stage
+            LLM->>Tools: name and args
+            Tools->>FX: read-only lookup
+            Tools->>Agent: mutate state, return JSON
+        end
+        LLM-->>Agent: reply from this turn's tool JSON
+        Agent->>Store: save(state)
+        API-->>UI: reply and snapshot
+    end
+```
+
+Tools write specific fields on the same `SessionState`. Fixtures are never modified.
+
+```mermaid
+flowchart LR
+    subgraph SessionState
+        PII[collected_pii]
+        V[verified / party_id]
+        H[case_hint]
+        C[selected_case_id]
+        St[stage]
+        Tr[transcript]
+    end
+
+    remember --> H
+    verify_identity --> PII
+    verify_identity --> V
+    list_claims --> C
+    get_claim --> C
+    get_document_guidance --> C
+    finish_case --> St
+    send_email_summary --> St
+    skip_email_summary --> St
+    escalate_to_human --> St
+    turn[user and assistant lines] --> Tr
+```
+
+The same process serves `GET /`, `GET /logo.png`, and `GET /healthz`. An empty unverified reply is replaced with an identity ask before save. GitHub renders the diagrams from [Mermaid](https://mermaid.js.org/).
+
+## Setup
+
+Python 3.12+ and an [OpenRouter](https://openrouter.ai/) API key.
 
 ```bash
 python3 -m venv .venv
@@ -26,7 +108,13 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Set `OPENROUTER_API_KEY` in `.env`. Optional: `OPENROUTER_MODEL` (default `openai/gpt-4o-mini`).
+Set these in `.env`. Use the same model as the demo, or any other OpenRouter id:
+
+```
+OPENROUTER_API_KEY=your_key
+OPENROUTER_MODEL=z-ai/glm-5.3-flashx
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+```
 
 ```bash
 export PYTHONPATH=.
@@ -39,58 +127,72 @@ Open http://127.0.0.1:8000
 pytest apps/insurance_claims/tests -q
 ```
 
-Live OpenRouter tests need a key and network. Offline tool/SOP tests do not.
+SOP and tool tests run offline. Tests that call the model need a key and network.
 
-## Demo script
-
-Reload the page for a new session. Paste:
-
-```text
-I'm the policyholder. My name is Margaret Chen, policy POL-9921. I'm calling about my denied healthcare claim from January. DOB is 1985-03-15, SSN last four is 4472.
-```
-
-Expect: verify first (no CL-2048 before ID), then **CL-2048 only**. Ask why it was denied, then wrap up and send or skip email.
-
-More scripts: [`apps/insurance_claims/sample_test_cases.md`](apps/insurance_claims/sample_test_cases.md)
-
-Fixture callers (3 of 5):
-
-| Caller | Policy | DOB | Last 4 |
-|---|---|---|---|
-| Margaret Chen | POL-9921 | 1985-03-15 | 4472 |
-| Ma Tian | POL-8836 | 1964-09-10 | 6688 |
-| Ava Lopez | POL-1044 | 1990-08-21 | 9180 |
-| Ya Wen Li / Yaven Li | POL-7742 | 1989-12-03 | 5317 |
-
-Ava and Ya Wen have no claims on file.
-
-## Docker
+### Docker
 
 ```bash
 docker build -t getclaimed .
 docker run --rm -p 8000:8000 --env-file .env getclaimed
 ```
 
-Then http://127.0.0.1:8000
+The image listens on `$PORT` (default 8000). Keep replicas at **one** or `/chat` will miss the session created on another process.
 
-## Railway
+## Trying the demo
 
-The app is one FastAPI process (UI + `/chat`). Use a **single replica**. In-memory sessions are per process; that is fine on one container, not on multi-instance serverless.
-
-1. Connect this GitHub repo in Railway (Dockerfile at repo root).
-2. Variables:
-   - `OPENROUTER_API_KEY` (required)
-   - `OPENROUTER_MODEL=openai/gpt-4o-mini` (optional)
-   - `PORT=8000` (matches the Dockerfile listen port)
-3. Networking → Generate domain.
-4. Check `https://<your-domain>/healthz` then `/`.
-
-If the service never becomes healthy, set custom start command:
+Reload, then send:
 
 ```text
-uvicorn apps.insurance_claims.api:app --host 0.0.0.0 --port $PORT
+I'm the policyholder. My name is Margaret Chen, policy POL-9921. I'm calling about my denied healthcare claim from January. DOB is 1985-03-15, SSN last four is 4472.
 ```
 
-and drop the `PORT=8000` variable so Railway’s `$PORT` is used.
+The assistant should finish identity before naming a claim, then land on **CL-2048** from the stored January / healthcare / denied hint. From there you can ask why it was denied and accept or skip the email.
 
-Do not commit `.env`. Use Railway / `.env` locally only.
+Additional scripts live in [`apps/insurance_claims/sample_test_cases.md`](apps/insurance_claims/sample_test_cases.md).
+
+| Caller | Policy | DOB | Last 4 | Notes |
+|---|---|---|---|---|
+| Margaret Chen | POL-9921 | 1985-03-15 | 4472 | Several claims; unique hint → CL-2048 |
+| Ma Tian | POL-8836 | 1964-09-10 | 6688 | One denied healthcare claim |
+| Ava Lopez | POL-1044 | 1990-08-21 | 9180 | No claims on file |
+| Ya Wen Li / Yaven Li | POL-7742 | 1989-12-03 | 5317 | No claims on file |
+
+## Project layout
+
+```
+.
+├── Dockerfile
+├── requirements.txt
+├── .env.example
+├── logo.png
+└── apps/insurance_claims/
+    ├── api.py                 HTTP + UI
+    ├── agent.py               tool loop per turn
+    ├── tools.py               SOP side effects and allow-lists
+    ├── verifier.py            identity match against fixtures
+    ├── state.py               session model
+    ├── store.py               in-memory session store
+    ├── llm.py                 OpenRouter client
+    ├── context.py             reply/list helpers
+    ├── guards.py              empty-reply fallback
+    ├── escalation.py
+    ├── fixtures_loader.py
+    ├── fixture_models.py
+    ├── config.py
+    ├── static/index.html
+    ├── fixtures/
+    ├── tests/
+    └── sample_test_cases.md
+```
+
+| Module | Responsibility |
+|---|---|
+| `api.py` | `/chat`, `/session`, static UI. One `ClaimsAgent` per process. |
+| `agent.py` | Binds tools for the current stage and runs the loop. |
+| `tools.py` | Identity, memory, claims, documents, email consent, escalation. |
+| `verifier.py` | Field normalization and the three-field identity threshold. |
+| `state.py` | Transcript, collected details, hint, selected case, workflow stage. |
+| `static/index.html` | Chat UI, claim snapshot, sample-claim modal. |
+| `fixtures/` | Policyholders, claims, and document guidelines. No live backend. |
+
+Do not commit `.env`.

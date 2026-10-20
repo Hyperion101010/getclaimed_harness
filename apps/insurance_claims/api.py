@@ -37,14 +37,12 @@ def _debug_payload(state: SessionState) -> dict[str, Any]:
         "collected_pii": state.collected_pii.model_dump(),
         "match_counts": state.match_counts.model_dump(),
         "matched_count": state.match_counts.matched_count,
-        "intent": state.intent.value if state.intent else None,
         "case_hint": state.case_hint.model_dump() if state.case_hint else None,
         "selected_case_id": state.selected_case_id,
         "consent_choice": state.consent_choice.value,
         "email_status": state.email_status,
         "escalated": state.escalated,
         "done": state.done,
-        "sentiment": state.sentiment.value,
     }
 
 
@@ -77,7 +75,6 @@ def index() -> FileResponse:
 
 @app.get("/logo.png")
 def logo() -> FileResponse:
-    """Serve the supplied brand asset without duplicating it in the package."""
     return FileResponse(PROJECT_ROOT / "logo.png", media_type="image/png")
 
 

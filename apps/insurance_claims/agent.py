@@ -3,23 +3,18 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
-from langgraph.graph import END, StateGraph
-from pydantic import BaseModel
 
 from apps.insurance_claims.context import (
-    TurnContext,
     claim_list_item,
-    collected_pii_present,
-    emit_reply,
+    format_list,
     formatting_notes,
     identity_list_items,
-    recent_transcript,
 )
 from apps.insurance_claims.escalation import ESCALATION_MESSAGE, mark_escalated, should_escalate
 from apps.insurance_claims.guards import apply_output_guard
 from apps.insurance_claims.llm import build_chat_model
 from apps.insurance_claims.state import Phase, SessionState
-from apps.insurance_claims.store import InMemorySessionStore, SessionStore
+from apps.insurance_claims.store import InMemorySessionStore
 from apps.insurance_claims.tools import (
     ToolResult,
     execute_tool,
@@ -55,13 +50,6 @@ If still unverified, ask for remaining identity fields as a real bullet list, no
 """
 
 
-class TurnGraphState(BaseModel):
-    session: SessionState
-    user_message: str = ""
-    reply: str = ""
-    use_llm_reply: bool = True
-
-
 def agent_system_prompt(session: SessionState) -> str:
     hint = session.case_hint.model_dump() if session.case_hint else None
     return (
@@ -79,6 +67,7 @@ def reply_from_tool_results(
     results: list[ToolResult],
     user_message: str,
 ) -> str:
+    del user_message
     if session.phase == Phase.ESCALATED:
         return ESCALATION_MESSAGE
 
@@ -101,8 +90,7 @@ def reply_from_tool_results(
 
     if not session.verified:
         instruction = (
-            "Identity is not verified yet. Ask for identity details before any claim information. "
-            "Use list_items as a bullet list of allowed fields. Do not write them as a comma sentence."
+            "Identity is not verified yet. Ask for identity details before any claim information."
         )
         list_items = identity_list_items(missing)
         list_style = "bullet"
@@ -112,33 +100,22 @@ def reply_from_tool_results(
         if emailed.ok:
             status = (emailed.data or {}).get("status")
             if status == "approved":
-                instruction = (
-                    "The email tool reports approved. Confirm it was sent to the address in "
-                    "tool_results and close."
-                )
+                instruction = "Confirm the email was sent to the address in the tool results and close."
             else:
-                instruction = (
-                    "Consent was given and the email was submitted. Report the tool status as pending. "
-                    "Do not claim it was delivered."
-                )
+                instruction = "Consent was given. Report the email status as pending. Do not claim it was delivered."
         else:
             instruction = "The email was not sent. Ask whether to send or skip the email summary."
     elif listed and listed.data.get("count") == 0:
-        instruction = (
-            "There are no matching claims on file for this caller. Say that clearly. "
-            "Do not invent claim IDs."
-        )
+        instruction = "There are no matching claims on file. Say that clearly. Do not invent claim IDs."
     elif listed and int(listed.data.get("count") or 0) > 1:
-        instruction = (
-            "More than one claim still matches. List only the candidates in list_items "
-            "and ask which one to open. Do not invent extra claims."
-        )
+        instruction = "More than one claim still matches. List the candidates and ask which one to open."
         list_items = [claim_list_item(claim) for claim in listed.data.get("claims") or []]
         list_style = "numbered"
     elif got or session.selected_case_id:
+        case_id = session.selected_case_id or ((got.data.get("claim") or {}).get("case_id") if got else "")
         instruction = (
-            "Answer using tool_results only: claim status, denial reason, documents needed, "
-            "appeal deadline, amounts, and document guidance. Do not invent facts."
+            f"Selected claim: {case_id}. Answer using tool results only: "
+            "status, denial reason, documents, appeal deadline, amounts."
         )
         claim = (got.data.get("claim") if got else None) or {}
         if docs and docs.data.get("documents"):
@@ -150,27 +127,14 @@ def reply_from_tool_results(
     else:
         instruction = (
             "Identity is verified but there is not enough of a claim hint yet. Ask whether "
-            "this is healthcare, dental, or auto, and whether it is denied, open, or closed. "
-            "Do not list claim IDs or statuses."
+            "this is healthcare, dental, or auto, and whether it is denied, open, or closed."
         )
 
-    context = TurnContext(
-        phase=session.phase,
-        identity_verified=session.verified,
-        instruction=instruction,
-        user_message=user_message,
-        sentiment=session.sentiment.value,
-        missing_identity_fields=missing,
-        collected_pii_present=collected_pii_present(session),
-        case_hint=session.case_hint.model_dump() if session.case_hint else None,
-        intent=session.intent.value if session.intent else None,
-        selected_case_id=session.selected_case_id,
-        tool_results=[item.model_dump() for item in results],
-        recent_transcript=recent_transcript(session),
-        list_style=list_style,
-        list_items=list_items,
-    )
-    return emit_reply(context, use_llm=False)
+    parts = [instruction]
+    formatted = format_list(list_style, list_items)
+    if formatted:
+        parts.append(formatted)
+    return "\n\n".join(parts).strip()
 
 
 def _tool_call_parts(call: Any) -> tuple[str, dict[str, Any], str]:
@@ -235,9 +199,7 @@ def run_llm_tool_loop(session: SessionState, user_message: str) -> tuple[str, li
             name, args, call_id = _tool_call_parts(call)
             result = execute_tool(name, args, session)
             results.append(result)
-            messages.append(
-                ToolMessage(content=result.model_dump_json(), tool_call_id=call_id)
-            )
+            messages.append(ToolMessage(content=result.model_dump_json(), tool_call_id=call_id))
         if session.phase == Phase.ESCALATED:
             return ESCALATION_MESSAGE, results
 
@@ -298,31 +260,10 @@ def run_agent_turn(
     return reply
 
 
-def build_turn_graph(
-    *,
-    use_llm_reply: bool = True,
-    scripted_calls: ScriptedCalls | None = None,
-):
-    def turn_node(state: TurnGraphState) -> dict:
-        reply = run_agent_turn(
-            state.session,
-            state.user_message,
-            use_llm_reply=state.use_llm_reply if state.use_llm_reply is not None else use_llm_reply,
-            scripted_calls=scripted_calls,
-        )
-        return {"session": state.session, "reply": reply}
-
-    graph = StateGraph(TurnGraphState)
-    graph.add_node("turn", turn_node)
-    graph.set_entry_point("turn")
-    graph.add_edge("turn", END)
-    return graph.compile()
-
-
 class ClaimsAgent:
     def __init__(
         self,
-        store: SessionStore | None = None,
+        store: InMemorySessionStore | None = None,
         *,
         use_llm_reply: bool = True,
         scripted_calls: ScriptedCalls | None = None,
@@ -330,10 +271,6 @@ class ClaimsAgent:
         self.store = store or InMemorySessionStore()
         self.use_llm_reply = use_llm_reply
         self.scripted_calls = scripted_calls
-        self.graph = build_turn_graph(
-            use_llm_reply=use_llm_reply,
-            scripted_calls=scripted_calls,
-        )
 
     def start_session(self) -> SessionState:
         return self.store.create()
@@ -342,18 +279,10 @@ class ClaimsAgent:
         session = self.store.get(session_id)
         if session is None:
             raise KeyError(f"Unknown session_id: {session_id}")
-
-        result = self.graph.invoke(
-            TurnGraphState(
-                session=session,
-                user_message=user_message,
-                use_llm_reply=self.use_llm_reply,
-            )
+        reply = run_agent_turn(
+            session,
+            user_message,
+            use_llm_reply=self.use_llm_reply,
+            scripted_calls=self.scripted_calls,
         )
-        if isinstance(result, dict):
-            final_state = TurnGraphState.model_validate(result)
-        else:
-            final_state = result
-
-        saved = self.store.save(final_state.session)
-        return saved, final_state.reply
+        return self.store.save(session), reply
