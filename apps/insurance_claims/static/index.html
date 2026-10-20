@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>GetClaimed</title>
+  <title>GetClaim: AI Claim Agent</title>
   <style>
     :root { --ink:#123554; --muted:#5c7389; --line:#c9e2ee; --gold:#f0ad35; --navy:#0d416b; --teal:#10a9a1; --sky:#dff5ff; --page:#f4fbff; }
     * { box-sizing:border-box; } html, body { margin:0; min-height:100%; }
     body { height:100dvh; overflow:hidden; color:var(--ink); font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; background:#fff; display:flex; flex-direction:column; }
     .topbar { height:92px; flex:0 0 92px; display:flex; align-items:center; justify-content:space-between; padding:0 77px; border-bottom:1px solid #bde5ef; background:linear-gradient(90deg,#fff 0%,#f0fcff 100%); }
-    .brand { display:flex; align-items:center; gap:9px; font-size:34px; font-weight:750; letter-spacing:-1.45px; color:var(--navy); }
+    .brand { display:flex; align-items:center; gap:9px; font-size:26px; font-weight:750; letter-spacing:-.6px; color:var(--navy); }
     .brand-mark { width:47px; height:53px; background:url('/logo.png') 50% 34% / 138px auto no-repeat; flex:none; }
     nav { display:flex; align-items:center; } .sample-claims-button { padding:11px 18px; border:1px solid #8ed4df; border-radius:10px; color:var(--navy); background:#fff; box-shadow:0 3px 8px rgba(29,101,132,.1); font:600 17px/1 Inter,ui-sans-serif,sans-serif; cursor:pointer; }
     .workspace { flex:1; min-height:0; background:radial-gradient(circle at 50% 25%,rgba(255,255,255,.98) 0%,rgba(255,255,255,.73) 28%,transparent 52%),radial-gradient(circle at 83% 16%,#c9f4ef 0%,transparent 30%),linear-gradient(130deg,#e4f7ff 0%,#f7fcff 45%,#e4f6ff 100%); }
@@ -44,17 +44,17 @@
     .modal-header { display:flex; align-items:center; justify-content:space-between; padding:22px 26px; color:#fff; background:linear-gradient(110deg,#0d416b,#129d9d); } .modal-header h2 { margin:0; font-size:24px; } .close-modal { width:34px; height:34px; border:0; border-radius:50%; color:#fff; background:rgba(255,255,255,.18); font-size:24px; cursor:pointer; }
     .modal-body { max-height:calc(100dvh - 155px); overflow:auto; padding:22px 26px 28px; } .modal-body p { margin:0 0 17px; color:var(--muted); line-height:1.45; } .sample-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; } .sample-card { padding:15px; border:1px solid #cdebf1; border-radius:12px; background:#fff; } .sample-card h3 { margin:0 0 8px; font-size:18px; } .sample-card p { margin:0 0 4px; font-size:14px; } .sample-card code { color:#0d6380; font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; } .claim-list { margin:9px 0 0; padding-left:19px; font-size:14px; line-height:1.55; } .no-claims { color:#aa7415!important; font-weight:600; }
     @media (max-width:1050px) { .stage { display:block; padding:0; } .claim-card { display:none; } .conversation { width:min(760px,calc(100% - 48px)); margin:0 auto; padding-top:60px; } }
-    @media (max-width:720px) { .topbar { height:72px; padding:0 20px; } .brand { font-size:25px; } .brand-mark { width:38px; height:45px; } .sample-claims-button { padding:9px 12px; font-size:14px; } .claim-card { display:none; } .conversation { width:auto; margin:0 16px; padding-top:30px; } .assistant .bubble { margin-left:0; } .assistant-id { display:none; } .bubble,.user .bubble { max-width:100%; width:auto; } .composer { margin-bottom:20px; padding:10px; } footer { font-size:12px; gap:12px; } .sample-grid { grid-template-columns:1fr; } }
+    @media (max-width:720px) { .topbar { height:72px; padding:0 20px; } .brand { font-size:16px; letter-spacing:0; } .brand-mark { width:38px; height:45px; } .sample-claims-button { padding:9px 12px; font-size:14px; } .claim-card { display:none; } .conversation { width:auto; margin:0 16px; padding-top:30px; } .assistant .bubble { margin-left:0; } .assistant-id { display:none; } .bubble,.user .bubble { max-width:100%; width:auto; } .composer { margin-bottom:20px; padding:10px; } footer { font-size:12px; gap:12px; } .sample-grid { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
-  <header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>GetClaimed</span></div><nav aria-label="Primary navigation"><button id="sampleClaimsButton" class="sample-claims-button" type="button">Sample Claims</button></nav></header>
+  <header class="topbar"><div class="brand"><span class="brand-mark" aria-hidden="true"></span><span>GetClaim: AI Claim Agent</span></div><nav aria-label="Primary navigation"><button id="sampleClaimsButton" class="sample-claims-button" type="button">Sample Claims</button></nav></header>
   <main class="workspace">
     <section class="stage">
       <aside class="claim-card" aria-label="Claim snapshot"><h1>Claim Snapshot</h1><dl>
         <div class="field"><dt>Claim ID</dt><dd id="claimId">••••••••••••</dd></div><div class="field"><dt>Policy Holder</dt><dd id="policyHolder">Awaiting identity</dd></div><div class="field"><dt>Status</dt><dd id="claimStatus" class="status-pending">Identity required</dd></div>
       </dl></aside>
-      <section class="conversation" aria-label="GetClaimed assistant"><div id="log" aria-live="polite"></div><form id="form" class="composer"><input id="input" type="text" autocomplete="off" placeholder="Type your message..." aria-label="Type your message" /><button id="send" type="submit">Send</button></form></section>
+      <section class="conversation" aria-label="Insurance claim assistant"><div id="log" aria-live="polite"></div><form id="form" class="composer"><input id="input" type="text" autocomplete="off" placeholder="Type your message..." aria-label="Type your message" /><button id="send" type="submit">Send</button></form></section>
     </section><aside class="empty-panel" aria-hidden="true"></aside>
   </main>
   <footer><span>Privacy Policy</span><span>Terms of Service</span><span>Copyright 2026 GetClaimed Inc.</span></footer>
@@ -77,7 +77,7 @@
     function addBubble(role,message,identity=false){const row=document.createElement('div');row.className='message '+role;if(role==='assistant'&&identity){const id=document.createElement('div');id.className='assistant-id';id.innerHTML='<span class="shelly"></span><span>Shelly</span>';row.appendChild(id)}const bubble=document.createElement('div');bubble.className='bubble';if(role==='assistant'){bubble.innerHTML=renderMessage(message)}else{bubble.textContent=message}row.appendChild(bubble);log.appendChild(row);log.scrollTop=log.scrollHeight}
     function showTyping(){const row=document.createElement('div');row.className='typing-row';row.id='typingIndicator';row.setAttribute('aria-label','One moment');const bubble=document.createElement('div');bubble.className='typing-bubble';const label=document.createElement('span');label.textContent='One moment';bubble.appendChild(label);for(let i=0;i<3;i++){const dot=document.createElement('span');dot.className='typing-dot';bubble.appendChild(dot)}row.appendChild(bubble);log.appendChild(row);log.scrollTop=log.scrollHeight}
     function hideTyping(){document.getElementById('typingIndicator')?.remove()}
-    function showWelcome(){addBubble('assistant',"Hello! I'm Shelly, your GetClaimed assistant.\nTo securely access your information, please provide your Claim ID and Date of Birth.",true)}
+    function showWelcome(){addBubble('assistant',"Hello! I'm Shelly, your insurance claim assistant.\nTo securely access your information, please provide your Claim ID and Date of Birth.",true)}
     function redactName(name){return String(name).split(/\s+/).filter(Boolean).map(part=>part[0]+"•".repeat(Math.max(3,part.length-1))).join(' ')}
     function redactPolicy(policy){const value=String(policy);const prefix=value.includes('-')?value.split('-')[0]+'-':'';return prefix+'••••'}
     function renderSnapshot(debug){const verified=!!debug.verified,pii=debug.collected_pii||{},hint=debug.case_hint||{};const claimId=document.getElementById('claimId'),holder=document.getElementById('policyHolder'),status=document.getElementById('claimStatus');if(verified){const claimState=String(hint.status||'').toLowerCase();claimId.textContent=debug.selected_case_id||'Claim located';holder.textContent=pii.name||'Verified policy holder';if(claimState==='denied'){status.textContent='Denied';status.className='status-denied'}else if(['accepted','approved','closed'].includes(claimState)){status.textContent=claimState==='closed'?'Closed':'Accepted';status.className='status-accepted'}else{status.textContent='In Review';status.className='status-review'}return}const supplied=Object.values(pii).filter(Boolean).length;claimId.textContent=pii.policy_number?redactPolicy(pii.policy_number):'••••••••••••';holder.textContent=pii.name?redactName(pii.name):(pii.phone?'••• ••• '+String(pii.phone).slice(-4):'Awaiting identity');status.textContent=supplied?'Verification in progress · '+supplied+' detail'+(supplied===1?'':'s')+' received':'Identity required';status.className='status-pending'}
