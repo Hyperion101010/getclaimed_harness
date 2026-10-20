@@ -6,8 +6,11 @@ FAILED_VERIFICATION_LIMIT = 3
 
 ESCALATION_MESSAGE = (
     "I understand this has been difficult. I'm connecting you with a human "
-    "representative who can help you further. Please stay on the line."
+    "representative who can help you further. Please stay on the line. "
+    "This chat is now closed."
 )
+
+CLOSED_MESSAGE = "This chat is closed. Reload the page to start a new session."
 
 
 def should_escalate(state: SessionState) -> bool:

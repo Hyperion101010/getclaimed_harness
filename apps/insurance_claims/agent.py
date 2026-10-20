@@ -10,7 +10,12 @@ from apps.insurance_claims.context import (
     formatting_notes,
     identity_list_items,
 )
-from apps.insurance_claims.escalation import ESCALATION_MESSAGE, mark_escalated, should_escalate
+from apps.insurance_claims.escalation import (
+    CLOSED_MESSAGE,
+    ESCALATION_MESSAGE,
+    mark_escalated,
+    should_escalate,
+)
 from apps.insurance_claims.guards import apply_output_guard
 from apps.insurance_claims.llm import build_chat_model
 from apps.insurance_claims.state import Phase, SessionState
@@ -228,12 +233,8 @@ def run_agent_turn(
 ) -> str:
     session.append_turn("user", user_message)
 
-    if session.phase == Phase.ESCALATED:
-        reply = ESCALATION_MESSAGE
-        session.append_turn("assistant", reply)
-        return reply
-    if session.phase == Phase.DONE:
-        reply = "This session is complete. Start a new session if you need more help."
+    if session.phase in {Phase.ESCALATED, Phase.DONE}:
+        reply = CLOSED_MESSAGE
         session.append_turn("assistant", reply)
         return reply
 

@@ -77,3 +77,31 @@ def test_chat_margaret_verifies_and_resolves():
     assert "CL-2102" not in first["reply"]
     assert "CL-1899" not in first["reply"]
     assert "CL-2011" not in first["reply"]
+
+
+def test_escalated_chat_closes():
+    def escalate(_session, _message):
+        return [("escalate_to_human", {"reason": "asked"})]
+
+    reset_agent(
+        ClaimsAgent(
+            store=InMemorySessionStore(),
+            use_llm_reply=False,
+            scripted_calls=escalate,
+        )
+    )
+    client = TestClient(app)
+    created = client.post("/session").json()
+    first = client.post(
+        "/chat",
+        json={"session_id": created["session_id"], "message": "I want a person"},
+    ).json()
+    assert first["debug"]["escalated"] is True
+    assert first["debug"]["done"] is True
+    assert "connecting you with a human" in first["reply"].lower()
+    second = client.post(
+        "/chat",
+        json={"session_id": created["session_id"], "message": "End this chat then"},
+    ).json()
+    assert "closed" in second["reply"].lower()
+    assert "connecting you with a human" not in second["reply"].lower()

@@ -244,3 +244,4 @@ def test_escalate_to_human_sets_phase():
     assert result.ok is True
     assert state.phase == Phase.ESCALATED
     assert state.escalated is True
+    assert state.done is True
